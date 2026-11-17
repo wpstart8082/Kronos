@@ -1,0 +1,44 @@
+html, body, #app { height: 100%; margin: 0; }
+body {
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  background: #f5f7fa;
+}
+.login-wrap {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1f2d3d 0%, #2b4d6f 55%, #25567b 100%);
+}
+.login-card { width: 380px; padding: 36px 34px 28px; border-radius: 10px; background: #fff; box-shadow: 0 12px 40px rgba(0,0,0,.28); }
+.login-title { font-size: 21px; font-weight: 600; text-align: center; margin-bottom: 4px; color: #1f2d3d; }
+.login-sub { font-size: 12px; color: #909399; text-align: center; margin-bottom: 24px; }
+.layout { height: 100%; }
+.aside {
+  background: #1f2d3d; color: #cfd8e3; width: 216px !important;
+  display: flex; flex-direction: column;
+}
+.brand { color: #fff; font-size: 16px; font-weight: 600; padding: 18px 16px 14px; letter-spacing: .5px; }
+.brand small { display:block; font-size: 11px; color:#7f95ab; font-weight: 400; margin-top:3px; }
+.aside .el-menu { border-right: none; background: transparent; flex: 1; }
+.aside .el-menu-item { color: #cfd8e3; height: 46px; }
+.aside .el-menu-item.is-active { color: #fff; background: #263445; }
+.aside .el-menu-item:hover { background: #263445; }
+.aside-footer { padding: 12px 16px; font-size: 12px; color: #7f95ab; }
+.main { background: #f5f7fa; padding: 16px 20px; overflow-y: auto; }
+.page-title { font-size: 17px; font-weight: 600; color: #303133; margin: 2px 0 14px; }
+.stat-cards { margin-bottom: 14px; }
+.stat-card .num { font-size: 26px; font-weight: 700; color: #303133; }
+.stat-card .num.warn { color: #e6a23c; }
+.stat-card .num.bad { color: #f56c6c; }
+.stat-card .label { font-size: 12px; color: #909399; margin-top: 2px; }
+.chart-card { margin-bottom: 14px; }
+.chart { width: 100%; height: 300px; }
+.chart-sm { width: 100%; height: 240px; }
+.mono { font-family: Consolas, Menlo, monospace; font-size: 12px; }
+.key-plaintext { background: #f0f9eb; border: 1px dashed #95d475; padding: 10px 12px; border-radius: 6px; margin: 10px 0; word-break: break-all; }
+.muted { color: #909399; font-size: 12px; }
+.mt { margin-top: 12px; }
+.selftest-item { padding: 10px 4px; border-bottom: 1px dashed #ebeef5; }
+.selftest-detail { color: #606266; font-size: 12.5px; margin-top: 4px; word-break: break-all; }
+.gpu-bar { margin-top: 6px; }

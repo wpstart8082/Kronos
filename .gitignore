@@ -74,3 +74,9 @@ venv.bak/
 temp/
 tmp/
 .python-version
+
+# kronos prediction service runtime artifacts
+kronos_service/instance/
+kronos_service/logs/
+models/
+volumes/

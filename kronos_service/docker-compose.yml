@@ -1,0 +1,27 @@
+services:
+  kronos-api:
+    build:
+      context: ..
+      dockerfile: kronos_service/Dockerfile
+    image: kronos-prediction-service:latest
+    container_name: kronos-api
+    gpus: all                     # 4090 passthrough (Docker Desktop WSL2 supported)
+    env_file: .env
+    environment:
+      KRONOS_MODELS_DIR: /models
+      KRONOS_INSTANCE_DIR: /app/instance
+      KRONOS_LOG_DIR: /app/logs
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../models:/models                 # model weights live on the host
+      - ../volumes/instance:/app/instance # SQLite database
+      - ../volumes/logs:/app/logs         # service logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    stop_grace_period: 120s        # let in-flight inferences finish
+    restart: unless-stopped
