@@ -110,7 +110,9 @@ def create_app(settings: Settings | None = None, preload: list[str] | None = Non
     app = FastAPI(
         title="Kronos 预测服务",
         version=__version__,
-        description="Kronos K线预测模型 REST API（股票/指数等任意品种 K 线预测）",
+        description="Kronos K线预测模型 REST API（股票/指数等任意品种 K 线预测；"
+        "未指定 model 时按标的类型自动路由：指数→kronos-base 原版零样本，股票→kronos-as-base A股微调版。"
+        "⚠️ 股票入参 K 线必须后复权(hfq)）",
         lifespan=lifespan,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",

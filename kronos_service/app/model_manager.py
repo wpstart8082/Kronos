@@ -17,30 +17,29 @@ from typing import Any
 logger = logging.getLogger("kronos.model_manager")
 
 REGISTRY: dict[str, dict[str, Any]] = {
-    "kronos-mini": {
-        "display_name": "Kronos-mini",
-        "model_dirname": "Kronos-mini",
-        "tokenizer_dirname": "Kronos-Tokenizer-2k",
-        "hf_model_id": "NeoQuasar/Kronos-mini",
-        "hf_tokenizer_id": "NeoQuasar/Kronos-Tokenizer-2k",
-        "max_context": 2048,
-        "params": "4.1M",
-    },
-    "kronos-small": {
-        "display_name": "Kronos-small",
-        "model_dirname": "Kronos-small",
-        "tokenizer_dirname": "Kronos-Tokenizer-base",
-        "hf_model_id": "NeoQuasar/Kronos-small",
-        "hf_tokenizer_id": "NeoQuasar/Kronos-Tokenizer-base",
-        "max_context": 512,
-        "params": "24.7M",
-    },
+    # Online production set: exactly the two models used by asset routing.
+    # (kronos-mini / kronos-small were retired with the 2026-11 cleanup -
+    # never deployed, weights removed; the HuggingFace originals remain
+    # available via NeoQuasar/Kronos-* if ever needed again.)
     "kronos-base": {
         "display_name": "Kronos-base",
         "model_dirname": "Kronos-base",
         "tokenizer_dirname": "Kronos-Tokenizer-base",
         "hf_model_id": "NeoQuasar/Kronos-base",
         "hf_tokenizer_id": "NeoQuasar/Kronos-Tokenizer-base",
+        "max_context": 512,
+        "params": "102.3M",
+    },
+    # A-share fine-tuned pair (finetune/ qlib pipeline, full-market daily K-lines
+    # 2015-2023, see finetune/docs/A股微调训练计划.md). Local-only: empty hf ids
+    # so a missing dir fails loudly instead of silently falling back to the
+    # original pretrained weights under this name.
+    "kronos-as-base": {
+        "display_name": "Kronos-base·A股微调v1",
+        "model_dirname": "Kronos-AS-v1",
+        "tokenizer_dirname": "Kronos-Tokenizer-AS-v1",
+        "hf_model_id": "",
+        "hf_tokenizer_id": "",
         "max_context": 512,
         "params": "102.3M",
     },

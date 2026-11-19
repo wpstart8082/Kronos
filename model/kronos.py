@@ -463,7 +463,9 @@ def auto_regressive_inference(tokenizer, model, x, x_stamp, y_stamp, max_context
         ]
         z = tokenizer.decode(input_tokens, half=True)
         z = z.reshape(-1, sample_count, z.size(1), z.size(2))
-        preds = z.cpu().numpy()
+        # .float() upcasts bf16 (when the caller wraps this in autocast) so
+        # .numpy() works; it is a no-op for fp32.
+        preds = z.cpu().float().numpy()
         preds = np.mean(preds, axis=1)
 
         return preds

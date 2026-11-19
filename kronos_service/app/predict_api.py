@@ -8,6 +8,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .asset_routing import infer_asset_type
 from .auth import KeyInfo, require_api_key
 from .inference import DataValidationError, PredictParams, parse_candles
 from .model_manager import REGISTRY
@@ -30,9 +31,31 @@ class Candle(BaseModel):
 
 
 class PredictRequest(BaseModel):
-    model: str | None = Field(None, description="kronos-mini | kronos-small | kronos-base, 缺省用系统默认")
-    symbol: str | None = Field(None, max_length=32, description="标的代码, 仅用于标识与统计, 如 300308 / 000300")
-    data: list[Candle] = Field(..., min_length=2, description="历史K线, 需按时间升序(服务端会再次排序)")
+    model: str | None = Field(
+        None,
+        description="kronos-base(原版) | kronos-as-base(A股微调版)。"
+        "缺省时按标的类型自动路由: 指数→kronos-base(原版零样本), 股票→kronos-as-base; "
+        "显式传入本参数则跳过路由",
+    )
+    asset_type: Literal["index", "stock"] | None = Field(
+        None,
+        description="标的类型显式声明, 优先于 symbol 自动识别: index=指数, stock=股票",
+    )
+    symbol: str | None = Field(
+        None,
+        max_length=32,
+        description="标的代码, 用于标识/统计与模型路由, 如 300308 / sh000300。"
+        "指数请带前缀(sh000300/sz399001/csi000922)或后缀(000300.SH), 或显式传 asset_type=index"
+        "——裸 000xxx 与深市股票代码段冲突, 无法自动识别",
+    )
+    data: list[Candle] = Field(
+        ...,
+        min_length=2,
+        description="历史K线, 需按时间升序(服务端会再次排序)。"
+        "⚠️ 股票必须传后复权(hfq)K线: A股微调模型在后复权日线上训练, "
+        "不复权/前复权会因分红除权造成的价格跳变引入分布漂移; "
+        "指数无除权事件, 原始价即等价于后复权",
+    )
     lookback: int | None = Field(None, ge=8, le=4096, description="参与预测的历史窗口长度")
     pred_len: int = Field(..., ge=1, le=480, description="预测步数")
     temperature: float = Field(1.0, gt=0, le=5)
@@ -57,7 +80,7 @@ async def predict_sync(body: PredictRequest, request: Request, key: KeyInfo = De
     submitted = None
     try:
         submitted = await _submit(body, request, key, mode="sync")
-        job, _ = submitted
+        job, _, routed_asset = submitted
         sync_timeout = state.cfg.get_int("sync_timeout_seconds")
         try:
             # shield: a sync timeout must NOT cancel the underlying job -
@@ -80,7 +103,7 @@ async def predict_sync(body: PredictRequest, request: Request, key: KeyInfo = De
             total_ms=_time.perf_counter() - t0,
             queue_ms=result.queue_ms, inference_ms=result.inference_ms,
         )
-        return _build_response(body, job, result)
+        return _build_response(body, job, result, asset_type=routed_asset)
     except HTTPException as e:
         if submitted is None:  # validation / queue-full failures
             _log(state, request, key, "/v1/predict", e.status_code, body, None, total_ms=_time.perf_counter() - t0, error=str(e.detail))
@@ -94,7 +117,7 @@ async def predict_async(body: PredictRequest, request: Request, key: KeyInfo = D
     state = request.app.state
     t0 = _time.perf_counter()
     try:
-        job, _ = await _submit(body, request, key, mode="async")
+        job, _, _ = await _submit(body, request, key, mode="async")
         _log(state, request, key, "/v1/predict/async", 202, body, job, total_ms=_time.perf_counter() - t0)
         return {"task_id": job.task_id, "status": "queued", "status_url": f"/v1/tasks/{job.task_id}"}
     except HTTPException as e:
@@ -165,13 +188,42 @@ def _log(state, request: Request, key: KeyInfo, endpoint: str, status_code: int,
     )
 
 
+def _resolve_model(body: PredictRequest, cfg) -> tuple[str, str | None]:
+    """Explicit model wins; else asset routing (index/stock); else default.
+
+    Returns (model_key, routed_asset_type) - the latter is None when no
+    routing decision was made (explicit model or unrecognized symbol).
+    """
+    if body.model:
+        return body.model, None
+    if cfg.get_bool("enable_asset_routing"):
+        asset = body.asset_type or infer_asset_type(body.symbol)
+        if asset == "index":
+            return cfg.get("index_model"), "index"
+        if asset == "stock":
+            return cfg.get("stock_model"), "stock"
+    return cfg.get("default_model"), None
+
+
 async def _submit(body: PredictRequest, request: Request, key: KeyInfo, mode: str):
     state = request.app.state
     cfg = state.cfg
 
-    model_key = body.model or cfg.get("default_model")
+    model_key, routed_asset = _resolve_model(body, cfg)
     if model_key not in REGISTRY:
         raise HTTPException(status_code=422, detail=f"未知模型 {model_key}, 可选: {list(REGISTRY)}")
+    # Routed/local-only models must have weights deployed: kronos-as-base has
+    # no HF fallback, a missing dir cannot be downloaded -> fail fast with a
+    # clear message instead of an opaque inference error later.
+    location = state.model_manager.availability(model_key)["location"]
+    if location != "local":
+        can_download = bool(REGISTRY[model_key]["hf_model_id"]) and bool(REGISTRY[model_key]["hf_tokenizer_id"])
+        if location == "partial-local" or not can_download:
+            raise HTTPException(
+                status_code=503,
+                detail=f"模型 {model_key} 权重未部署(models/ 目录缺失且无 HF 回退), 无法服务; "
+                f"请部署权重或显式指定其他 model",
+            )
     if body.pred_len > cfg.get_int("max_pred_len"):
         raise HTTPException(status_code=422, detail=f"pred_len 超过当前配置上限 {cfg.get_int('max_pred_len')}")
     if body.sample_count > cfg.get_int("max_sample_count"):
@@ -215,13 +267,14 @@ async def _submit(body: PredictRequest, request: Request, key: KeyInfo, mode: st
         raise HTTPException(status_code=503, detail=str(e)) from e
     state.daily_quota.record(key.id)
     state.writer.touch_key(key.id)
-    return job, params
+    return job, params, routed_asset
 
 
-def _build_response(body: PredictRequest, job, result) -> dict[str, Any]:
+def _build_response(body: PredictRequest, job, result, asset_type: str | None = None) -> dict[str, Any]:
     return {
         "task_id": job.task_id,
         "model": job.model_key,
+        "asset_type": asset_type,
         "symbol": body.symbol,
         "request": {
             "pred_len": job.params.pred_len,

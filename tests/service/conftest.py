@@ -111,6 +111,9 @@ def fake_model(client, monkeypatch):
         return manager._loaded[key]
 
     monkeypatch.setattr(manager, "load", fake_load)
+    # Hermetic test env has no real weights on disk - report every registered
+    # model as locally available so the routing/availability guard passes.
+    monkeypatch.setattr(manager, "availability", lambda key: {"location": "local"})
     return manager
 
 

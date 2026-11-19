@@ -80,3 +80,9 @@ kronos_service/instance/
 kronos_service/logs/
 models/
 volumes/
+
+# fine-tune run artifacts (checkpoints, predictions, audit dumps, deploy keys)
+outputs/
+
+# local agent workspace
+.zcode/

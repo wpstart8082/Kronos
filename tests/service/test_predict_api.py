@@ -43,7 +43,7 @@ def test_models_endpoint(client, api_key, fake_model):
     r = client.get("/v1/models", headers=_hdr(api_key))
     assert r.status_code == 200
     keys = [m["key"] for m in r.json()["models"]]
-    assert keys == ["kronos-mini", "kronos-small", "kronos-base"]
+    assert keys == ["kronos-base", "kronos-as-base"]
 
 
 def test_sync_predict_happy_path(client, api_key, fake_model):
@@ -54,7 +54,9 @@ def test_sync_predict_happy_path(client, api_key, fake_model):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["symbol"] == "300308"
-    assert body["model"] == "kronos-base"
+    # bare 30xxxx = 创业板股票 -> routed to the A-share fine-tuned model
+    assert body["model"] == "kronos-as-base"
+    assert body["asset_type"] == "stock"
     assert len(body["predictions"]) == 10
     assert body["input"]["points"] == 60
     assert body["input"]["frequency"] == "daily"

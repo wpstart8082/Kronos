@@ -262,13 +262,17 @@ def generate_predictions(config: dict, test_data: dict) -> dict[str, pd.DataFram
     )
 
     results = defaultdict(list)
+    # bf16 autocast for inference: ~2x faster on Ada GPUs, negligible precision
+    # impact for ranking signals (probed with finetune/data_prep/probe_components.py).
+    use_bf16 = device.type == 'cuda'
     with torch.no_grad():
         for x, x_stamp, y_stamp, symbols, timestamps in tqdm(loader, desc="Inference"):
-            preds = auto_regressive_inference(
-                tokenizer, model, x.to(device), x_stamp.to(device), y_stamp.to(device),
-                max_context=config['max_context'], pred_len=config['pred_len'], clip=config['clip'],
-                T=config['T'], top_k=config['top_k'], top_p=config['top_p'], sample_count=config['sample_count']
-            )
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16, enabled=use_bf16):
+                preds = auto_regressive_inference(
+                    tokenizer, model, x.to(device), x_stamp.to(device), y_stamp.to(device),
+                    max_context=config['max_context'], pred_len=config['pred_len'], clip=config['clip'],
+                    T=config['T'], top_k=config['top_k'], top_p=config['top_p'], sample_count=config['sample_count']
+                )
             # You can try commenting on this line to keep the history data
             preds = preds[:, -config['pred_len']:, :]
 
@@ -313,9 +317,14 @@ def main():
         'device': args.device,
         'data_path': base_config.dataset_path,
         'result_save_path': base_config.backtest_result_path,
-        'result_name': base_config.backtest_save_folder_name,
-        'tokenizer_path': base_config.finetuned_tokenizer_path,
-        'model_path': base_config.finetuned_predictor_path,
+        # FT_RESULT_NAME separates e.g. the zero-shot baseline results from the
+        # finetuned ones (predictions.pkl would otherwise be overwritten).
+        'result_name': os.environ.get('FT_RESULT_NAME', base_config.backtest_save_folder_name),
+        # FT_TOKENIZER_PATH / FT_MODEL_PATH let this script run arbitrary
+        # checkpoints (e.g. the zero-shot pretrained models as a baseline)
+        # without touching config.py.
+        'tokenizer_path': os.environ.get('FT_TOKENIZER_PATH', base_config.finetuned_tokenizer_path),
+        'model_path': os.environ.get('FT_MODEL_PATH', base_config.finetuned_predictor_path),
         'max_context': base_config.max_context,
         'pred_len': base_config.predict_window,
         'clip': base_config.clip,
